@@ -1,0 +1,1 @@
+The Json toolkit is a parser/writer for JSON data format. This toolkit is designed to work with Delphi and FreePascal (win32, win64, linux32, linux64, MacOSX Intel)
