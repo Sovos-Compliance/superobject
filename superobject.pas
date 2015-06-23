@@ -85,7 +85,7 @@ unit superobject;
 
 interface
 uses
-  Classes
+  SysUtils, Classes
 {$IFDEF VER210}
   ,Generics.Collections, RTTI, TypInfo
 {$ENDIF}
@@ -122,6 +122,9 @@ type
   TSuperObject = class;
   ISuperObject = interface;
   TSuperArray = class;
+
+  EInvalidJson = class(Exception)
+  end;
 
 (* AVL Tree
  *  This is a "special" autobalanced AVL tree
@@ -809,7 +812,8 @@ function SOInvoke(const obj: TValue; const method: string; const params: string;
 {$ENDIF}
 
 implementation
-uses sysutils,
+uses
+  Math,
 {$IFDEF UNIX}
   baseunix, unix, DateUtils
 {$ELSE}
@@ -2213,11 +2217,15 @@ var
   obj: ISuperObject;
 begin
   tok := TSuperTokenizer.Create;
-  obj := ParseEx(tok, s, -1, strict, this, options, put, dt);
-  if(tok.err <> teSuccess) or (not partial and (s[tok.char_offset] <> #0)) then
-    Result := nil else
-    Result := obj;
-  tok.Free;
+  try
+    obj := ParseEx(tok, s, -1, strict, this, options, put, dt);
+    if(tok.err <> teSuccess) or (not partial and (s[tok.char_offset] <> #0)) then
+      Result := nil
+    else
+      Result := obj;
+  finally
+    tok.Free;
+  end;
 end;
 
 class function TSuperObject.ParseStream(stream: TStream; strict: Boolean;
@@ -2236,37 +2244,39 @@ var
 begin
   st := '';
   tok := TSuperTokenizer.Create;
-
-  if (stream.Read(bom, sizeof(bom)) = 2) and (bom[0] = $FF) and (bom[1] = $FE) then
-  begin
-    unicode := true;
-    size := stream.Read(bufferw, BUFFER_SIZE * SizeOf(SoChar)) div SizeOf(SoChar);
-  end else
+  try
+    if (stream.Read(bom, sizeof(bom)) = 2) and (bom[0] = $FF) and (bom[1] = $FE) then
     begin
-      unicode := false;
-      stream.Seek(0, soFromBeginning);
-      size := stream.Read(buffera, BUFFER_SIZE);
-    end;
-
-  while size > 0 do
-  begin
-    if not unicode then
-      for j := 0 to size - 1 do
-        bufferw[j] := SOChar(buffera[j]);
-    ParseEx(tok, bufferw, size, strict, this, options, put, dt);
-
-    if tok.err = teContinue then
+      unicode := true;
+      size := stream.Read(bufferw, BUFFER_SIZE * SizeOf(SoChar)) div SizeOf(SoChar);
+    end else
       begin
-        if not unicode then
-          size := stream.Read(buffera, BUFFER_SIZE) else
-          size := stream.Read(bufferw, BUFFER_SIZE * SizeOf(SoChar)) div SizeOf(SoChar);
-      end else
-      Break;
+        unicode := false;
+        stream.Seek(0, soFromBeginning);
+        size := stream.Read(buffera, BUFFER_SIZE);
+      end;
+
+    while size > 0 do
+    begin
+      if not unicode then
+        for j := 0 to size - 1 do
+          bufferw[j] := SOChar(buffera[j]);
+      ParseEx(tok, bufferw, size, strict, this, options, put, dt);
+
+      if tok.err = teContinue then
+        begin
+          if not unicode then
+            size := stream.Read(buffera, BUFFER_SIZE) else
+            size := stream.Read(bufferw, BUFFER_SIZE * SizeOf(SoChar)) div SizeOf(SoChar);
+        end else
+        Break;
+    end;
+    if(tok.err <> teSuccess) or (not partial and (st[tok.char_offset] <> #0)) then
+      Result := nil else
+      Result := tok.stack[tok.depth].current;
+  finally
+    tok.Free;
   end;
-  if(tok.err <> teSuccess) or (not partial and (st[tok.char_offset] <> #0)) then
-    Result := nil else
-    Result := tok.stack[tok.depth].current;
-  tok.Free;
 end;
 
 class function TSuperObject.ParseFile(const FileName: string; strict: Boolean;
@@ -3262,7 +3272,8 @@ redo_char:
 {$ENDIF}
     Result := TokRec^.current;
   end else
-    Result := nil;
+    raise EInvalidJson.CreateFmt('Invalid json at line %d, col %d: %s...',
+      [tok.line, tok.col, Copy(str, 1, Min(10, Length(str)))]);
 end;
 
 procedure TSuperObject.PutO(const path: SOString; const Value: ISuperObject);
