@@ -586,6 +586,8 @@ type
     function GetDataPtr: Pointer;
     procedure SetDataPtr(const Value: Pointer);
     property DataPtr: Pointer read GetDataPtr write SetDataPtr;
+    function GetThis : TSuperObject;
+    property This : TSuperObject read GetThis;
   end;
 
   TSuperObject = class(TObject, ISuperObject)
@@ -635,6 +637,7 @@ type
 {$ENDIF}
     function GetA(const path: SOString): TSuperArray;
     function Write(writer: TSuperWriter; indent: boolean; escape: boolean; level: integer): Integer; virtual;
+    function GetThis: TSuperObject;
   public
     function GetEnumerator: TSuperEnumerator;
     procedure AfterConstruction; override;
@@ -729,6 +732,7 @@ type
     // a data pointer to link to something ele, a treeview for example
     property DataPtr: Pointer read GetDataPtr write SetDataPtr;
     property Processing: boolean read GetProcessing;
+    property This : TSuperObject read GetThis;
   end;
 
 {$IFDEF VER210}
@@ -4403,6 +4407,11 @@ end;
 function TSuperObject.GetProcessing: boolean;
 begin
   Result := FProcessing;
+end;
+
+function TSuperObject.GetThis: TSuperObject;
+begin
+  Result := Self;
 end;
 
 procedure TSuperObject.SetDataPtr(const Value: Pointer);
